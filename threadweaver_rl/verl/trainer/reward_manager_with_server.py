@@ -42,6 +42,19 @@ from verl import DataProto  # type: ignore
 # print_verbose = print
 print_verbose = lambda *args, **kwargs: None
 
+_REWARD_EXTRA_BOOKKEEPING_KEYS = {
+    "__num_turns__",
+    "base_seq_uid",
+    "data_source",
+    "extra_info",
+    "is_last_in_expanded",
+    "multi_modal_inputs",
+    "request_id",
+    "reward_model",
+    "tool_call_counts",
+    "uid",
+}
+
 
 def _safe_float(v, default: float = 0.0) -> float:
     try:
@@ -668,7 +681,15 @@ class RewardManagerWithServer:
             if has_bonus_fields and uid_values is not None:
                 n = len(data)
                 ntb = data.non_tensor_batch
-                ntb_keys = [k for k, v in ntb.items() if hasattr(v, "__len__") and len(v) == n]
+                ntb_keys = [
+                    k
+                    for k, v in ntb.items()
+                    if (
+                        k not in _REWARD_EXTRA_BOOKKEEPING_KEYS
+                        and hasattr(v, "__len__")
+                        and len(v) == n
+                    )
+                ]
                 extra_infos = []
                 scores = []
                 for i in range(n):

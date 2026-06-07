@@ -264,3 +264,40 @@ def test_reward_manager_writes_final_reward_to_last_valid_token(monkeypatch):
     assert torch.allclose(reward_tensor[0], torch.tensor([0.0, 1.0 + expected_bonus, 0.0]))
     assert torch.allclose(reward_tensor[1], torch.tensor([0.0, 0.0, -1.0]))
     assert extra_info["parallel_rewardv2_bonus"] == [pytest.approx(expected_bonus, abs=1e-6), pytest.approx(0.0)]
+
+
+def test_server_reward_manager_does_not_return_uid_as_reward_extra():
+    class FakeData:
+        def __init__(self):
+            self.batch = {
+                "responses": torch.tensor([[1, 2], [3, 4]], dtype=torch.long),
+                "response_mask": torch.tensor([[1, 1], [1, 1]], dtype=torch.long),
+                "rm_scores": torch.tensor([[0.0, 1.0], [0.0, 1.0]], dtype=torch.float32),
+            }
+            self.non_tensor_batch = {
+                "uid": np.array(["group-1", "group-1"], dtype=object),
+                "base_seq_uid": np.array(["seq-1", "seq-2"], dtype=object),
+                "reward_before_parallel_bonus": np.array([1.0, 1.0], dtype=np.float32),
+                "correct": np.array([True, True], dtype=object),
+                "subtask_ratio": np.array([0.2, 0.6], dtype=np.float32),
+                "trial_ratio": np.array([0.4, 0.2], dtype=np.float32),
+                "parallel_ratio": np.array([0.6, 0.8], dtype=np.float32),
+                "total_num_tokens": np.array([100.0, 120.0], dtype=np.float32),
+            }
+
+        def __len__(self):
+            return 2
+
+    manager = server_reward_manager.RewardManagerWithServer(
+        tokenizer=None,
+        num_examine=0,
+        config=_cfg(),
+        auto_start_server=False,
+    )
+    result = manager(FakeData(), return_dict=True)
+
+    extra_info = result["reward_extra_info"]
+    assert "uid" not in extra_info
+    assert "base_seq_uid" not in extra_info
+    assert extra_info["correct"] == [True, True]
+    assert "parallel_rewardv2_bonus" in extra_info
